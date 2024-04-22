@@ -1,0 +1,223 @@
+---
+title: "DDSproject2"
+author: "Wachira"
+date: "2024-04-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(caret)
+library(class)
+library(e1071)
+
+# Load the data
+data <- read.csv("/Users/christywachira/Downloads/CaseStudy2-data.csv")
+summary(data)
+
+# Explore the structure of the data
+str(data)
+
+# Check for missing values
+sum(is.na(data))
+
+# Load necessary library for plotting
+library(ggplot2)
+
+# Plot to look at the distribution of variables
+ggplot(data, aes(x = MonthlyIncome)) +
+  geom_histogram(bins = 30, fill = 'firebrick', color = 'gold') +
+  labs(title = "Distribution of Monthly Income", x = "Monthly Income", y = "Frequency") +
+  theme_minimal()
+
+# Explore attrition rates
+table(data$Attrition)
+
+# Explore correlations
+correlations <- cor(data %>% select_if(is.numeric))
+
+# Load necessary library
+library(dplyr)
+library(ggplot2)
+
+# summarize data by job role
+jobRoleSatisfaction <- data %>%
+  group_by(JobRole) %>%
+  summarise(AverageSatisfaction = mean(JobSatisfaction, na.rm = TRUE),
+            Count = n()) %>%
+  arrange(desc(AverageSatisfaction))
+
+# visualize
+ggplot(jobRoleSatisfaction, aes(x = reorder(JobRole, AverageSatisfaction), y = AverageSatisfaction, fill = AverageSatisfaction)) +
+  geom_bar(stat = "identity") +
+  scale_fill_gradient(low = "orange", high = "firebrick4") +  # Defines a gradient from pink to red
+  labs(title = "Average Job Satisfaction by Job Role",
+       x = "Job Role",
+       y = "Average Job Satisfaction") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Shapiro-Wilk test for normality of residuals
+anova_model <- aov(JobSatisfaction ~ JobRole, data = data)
+shapiro.test(residuals(anova_model))
+
+# Install package  
+install.packages("car")
+library(car)
+
+# Levene's test
+leveneTest(JobSatisfaction ~ JobRole, data = data)
+
+# Kruskal-Wallis test
+kruskal.test(JobSatisfaction ~ JobRole, data = data)
+
+# Load necessary libraries
+library(caret)
+library(class)    
+library(e1071)  
+
+# Convert 'OverTime' from character to factor and then to numeric
+data$OverTime <- as.factor(data$OverTime)
+data$OvertimeNumeric <- as.numeric(data$OverTime) - 1  
+
+# Check the conversion
+table(data$OverTime, data$OvertimeNumeric)
+
+#######Split data into training and testing sets
+set.seed(123)  # for reproducibility
+indices <- createDataPartition(data$Attrition, p = 0.8, list = FALSE)
+trainData <- data[indices, ]
+testData <- data[-indices, ]
+
+# Linear Regression Model
+lmModel <- lm(MonthlyIncome ~ JobLevel + TotalWorkingYears + OvertimeNumeric + JobInvolvement, data = trainData)
+summary(lmModel)
+
+# Predict on the test set
+lmPredictions <- predict(lmModel, newdata = testData)
+
+# Calculate RMSE
+lmRMSE <- sqrt(mean((testData$MonthlyIncome - lmPredictions)^2))
+print(paste("RMSE of Linear Regression Model:", lmRMSE))
+
+# Convert Attrition to a factor for classification
+trainData$Attrition <- as.factor(trainData$Attrition)
+testData$Attrition <- as.factor(testData$Attrition)
+
+# Naïve Bayes Model
+nbModel <- naiveBayes(Attrition ~ JobLevel + MonthlyIncome + TotalWorkingYears + OvertimeNumeric + Department, data = trainData)
+
+# Predict on the test set
+nbPredictions <- predict(nbModel, newdata = testData)
+
+# Confusion Matrix to see the accuracy
+nbConfusion <- confusionMatrix(factor(nbPredictions), testData$Attrition)
+print(nbConfusion)
+
+# Load competition dataset
+competitionSetSalary <- read.csv("/Users/christywachira/Downloads/CaseStudy2CompSet+No+Salary.csv")
+
+# Check if 'OverTime' exists and is in the correct format (factor or character)
+if("OverTime" %in% names(competitionSetSalary) && is.character(competitionSetSalary$OverTime)) {
+  competitionSetSalary$OverTime <- as.factor(competitionSetSalary$OverTime)
+  competitionSetSalary$OvertimeNumeric <- as.numeric(competitionSetSalary$OverTime) - 1
+}
+
+# Predict Monthly Income using the linear regression model
+competitionSetSalary$PredictedSalary <- predict(lmModel, newdata = competitionSetSalary)
+
+# Order by ID
+competitionSetSalaryOrdered <- competitionSetSalary[order(competitionSetSalary$ID), ]
+
+# Select only the ID and PredictedSalary columns
+resultSalary <- competitionSetSalaryOrdered[, c("ID", "PredictedSalary")]
+
+# Write to CSV
+write.csv(resultSalary, "/Users/christywachira/Downloads/Case2PredictionsWachira_Salary.csv", row.names = FALSE)
+
+# Assuming the OverTime variable needs to be converted from character to factor and then to numeric
+if("OverTime" %in% names(competitionSet) && is.character(competitionSet$OverTime)) {
+  competitionSet$OverTime <- as.factor(competitionSet$OverTime)
+  # Convert to numeric
+  competitionSet$OvertimeNumeric <- as.numeric(competitionSet$OverTime) - 1
+}
+
+# Predict Attrition using the Naive Bayes model
+competitionSet$PredictedAttrition <- predict(nbModel, newdata = competitionSet)
+
+# Order by ID
+competitionSetOrdered <- competitionSet[order(competitionSet$ID), ]
+
+# Select only the ID and PredictedAttrition columns
+resultAttrition <- competitionSetOrdered[, c("ID", "PredictedAttrition")]
+
+# Write to CSV
+write.csv(resultAttrition, "/Users/christywachira/Downloads/Case2PredictionsWachira_Attrition.csv", row.names = FALSE)
+```
+
+
+```{r}
+#Rshiny app
+# Load necessary libraries
+library(shiny)
+library(ggplot2)
+
+# Define the user interface
+ui <- fluidPage(
+  titlePanel("Distribution of Monthly Income"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      helpText("Explore the distribution of monthly income among employees."),
+      
+      # Input to select the number of bins
+      sliderInput(inputId = "bins",
+                  label = "Number of Bins:",
+                  min = 5,
+                  max = 50,
+                  value = 30)
+    ),
+    
+    mainPanel(
+      plotOutput(outputId = "incomeHist") # Output plot
+    )
+  )
+)
+
+# Define server logic to create the histogram
+server <- function(input, output) {
+  
+  output$incomeHist <- renderPlot({
+    # Generate the histogram with the specified number of bins
+    ggplot(data, aes(x = MonthlyIncome)) +
+      geom_histogram(bins = input$bins, fill = 'firebrick', color = 'gold') +
+      labs(title = "Distribution of Monthly Income",
+           x = "Monthly Income",
+           y = "Frequency") +
+      theme_minimal()
+  })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
+```
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
